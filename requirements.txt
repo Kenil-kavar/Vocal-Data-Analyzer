@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-multipart
+requests
+pandas
+matplotlib
+seaborn
+openpyxl
+autogen
+aiofiles
+jinja2
+sqlalchemy
+openai
+python-dotenv

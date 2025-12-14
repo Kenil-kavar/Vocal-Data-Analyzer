@@ -1,0 +1,11 @@
+PatientID,Name,Age,Department,AdmissionDate,Doctor
+P1000,John Doe,50,Orthopedics,2023-06-22,Dr. Smith
+P1001,Jane Smith,65,Cardiology,2023-09-13,Dr. Jones
+P1002,Alice Johnson,66,Neurology,2023-05-30,Dr. Johnson
+P1003,Bob Brown,33,Cardiology,2023-01-19,Dr. Johnson
+P1004,Charlie Davis,33,Cardiology,2023-02-28,Dr. Johnson
+P1005,Diana Evans,72,Neurology,2023-08-12,Dr. Johnson
+P1006,Evan Wilson,32,Oncology,2023-10-06,Dr. Williams
+P1007,Fiona Clark,25,Neurology,2023-02-13,Dr. Jones
+P1008,George Harris,28,Cardiology,2024-01-01,Dr. Brown
+P1009,Hannah Lewis,56,Neurology,2023-10-02,Dr. Brown
