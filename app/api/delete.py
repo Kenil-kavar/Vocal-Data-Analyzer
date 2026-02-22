@@ -7,10 +7,11 @@ from app.database import database, models
 
 router = APIRouter()
 
-# Define base directories
-UPLOADS_DIR = "/home/kenil-kavar/Videos/Tauking Researcher/voice_eda_system/app/data/uploads"
-RESULTS_DIR = "/home/kenil-kavar/Videos/Tauking Researcher/voice_eda_system/app/data/results"
-AUDIO_DIR = "/home/kenil-kavar/Videos/Tauking Researcher/voice_eda_system/app/data/audio"
+# Define base directories using dynamic path
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOADS_DIR = os.path.join(BASE_DIR, "data", "uploads")
+RESULTS_DIR = os.path.join(BASE_DIR, "data", "results")
+AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
 
 @router.delete("/delete/{session_id}")
 async def delete_session_data(session_id: str, db: Session = Depends(database.get_db)):

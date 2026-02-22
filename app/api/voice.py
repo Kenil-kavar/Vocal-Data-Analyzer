@@ -5,8 +5,9 @@ import requests
 
 router = APIRouter()
 
-# Define the base directory for audio files
-AUDIO_DIRECTORY = "/home/kenil-kavar/Videos/Tauking Researcher/voice_eda_system/app/data/audio"
+# Define the base directory for audio files using dynamic path
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+AUDIO_DIRECTORY = os.path.join(BASE_DIR, "data", "audio")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_API_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
 

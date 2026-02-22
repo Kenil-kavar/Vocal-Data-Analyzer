@@ -8,8 +8,9 @@ from app.database import database, models
 
 router = APIRouter()
 
-# Define the base directory for uploads
-UPLOAD_DIRECTORY = "/home/kenil-kavar/Videos/Tauking Researcher/voice_eda_system/app/data/uploads"
+# Define the base directory for uploads using dynamic path
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+UPLOAD_DIRECTORY = os.path.join(BASE_DIR, "data", "uploads")
 
 @router.post("/upload")
 async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(database.get_db)):

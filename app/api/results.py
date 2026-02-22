@@ -25,6 +25,7 @@ async def get_results(session_id: str, db: Session = Depends(database.get_db)):
     results = {
         "cleaned_data": [],
         "visualizations": [],
+        "chart_code": [],  # New category for chart generation code
         "reports": [],
         "other": []
     }
@@ -42,6 +43,8 @@ async def get_results(session_id: str, db: Session = Depends(database.get_db)):
             results["cleaned_data"].append(file_info)
         elif file_record.file_type == "visualization":
             results["visualizations"].append(file_info)
+        elif file_record.file_type == "chart_code":
+            results["chart_code"].append(file_info)
         elif file_record.file_type == "report":
             results["reports"].append(file_info)
         else:

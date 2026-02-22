@@ -17,17 +17,16 @@ def run_eda_workflow(session_id: str, prompt: str, dataset_path: str, data_previ
     session_results_dir = os.path.join(RESULTS_DIR, session_id)
     os.makedirs(session_results_dir, exist_ok=True)
 
-    # Define the initial message for the coordinator
+    # Define the initial message for the coordinator - optimized for token efficiency
     initial_prompt = f"""
-    User request: '{prompt}'
-    Dataset path: '{dataset_path}'
-    Results directory: '{session_results_dir}'
+User request: '{prompt}'
+Dataset: '{dataset_path}'
+Results dir: '{session_results_dir}'
 
-    Here is a preview of the data:
-    {data_preview}
+Data preview:
+{data_preview}
 
-    Please start the EDA workflow based on this data.
-    """
+Start EDA workflow. Be concise and efficient. For visualizations, create EXACTLY the number and types of charts requested - no more, no less."""
 
     try:
         # Create a code executor agent to actually RUN the code that agents generate
@@ -58,15 +57,18 @@ def run_eda_workflow(session_id: str, prompt: str, dataset_path: str, data_previ
         # --- FILE REGISTRATION ---
         # Files are created directly in session_results_dir by the agents
         # Scan that directory and register them in the database
+        # ALL generated files are automatically saved to database
         
         file_patterns = {
             "cleaned_csv": "cleaned*.csv",
             "cleaned_excel": "*.xlsx",
             "cleaned_json": "cleaned*.json",
             "visualization": "*.png",
+            "chart_code": "*_code.py",  # New pattern for chart generation code
         }
         
         registered_files = []
+        seen_file_names = set()  # Track file names to prevent duplicates
         
         # Scan the results directory for output files
         for file_type, pattern in file_patterns.items():
@@ -79,6 +81,13 @@ def run_eda_workflow(session_id: str, prompt: str, dataset_path: str, data_previ
                 # Skip graph_data.json
                 if filename == 'graph_data.json':
                     continue
+                
+                # Skip duplicate files (case-insensitive)
+                filename_lower = filename.lower()
+                if filename_lower in seen_file_names:
+                    logger.info(f"Skipping duplicate file: {filename}")
+                    continue
+                seen_file_names.add(filename_lower)
                 
                 # Register in database
                 try:
@@ -96,13 +105,33 @@ def run_eda_workflow(session_id: str, prompt: str, dataset_path: str, data_previ
                 except Exception as e:
                     logger.error(f"❌ Failed to register {filename} in DB: {e}")
         
-        # Clean up: Remove Python code files from coding directory
+        # Clean up: Remove temporary Python code files from coding directory (but keep chart code files)
+        # Also remove duplicate chart files with different capitalization
         for py_file in glob.glob(os.path.join("coding", "*.py")):
             try:
-                os.remove(py_file)
-                logger.info(f"Removed temporary code file: {os.path.basename(py_file)}")
+                # Only remove files that don't contain chart generation code
+                filename = os.path.basename(py_file)
+                if not filename.endswith('_code.py'):
+                    os.remove(py_file)
+                    logger.info(f"Removed temporary code file: {filename}")
             except Exception as e:
                 logger.warning(f"Failed to remove {py_file}: {e}")
+        
+        # Remove duplicate PNG files with different capitalization in results directory
+        png_files = glob.glob(os.path.join(session_results_dir, "*.png"))
+        seen_names = set()
+        for png_file in png_files:
+            filename = os.path.basename(png_file)
+            # Convert to lowercase for comparison
+            name_lower = filename.lower()
+            if name_lower in seen_names:
+                try:
+                    os.remove(png_file)
+                    logger.info(f"Removed duplicate chart file: {filename}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove duplicate {png_file}: {e}")
+            else:
+                seen_names.add(name_lower)
         
         logger.info(f"✅ Total files registered: {len(registered_files)}")
         # ---------------------------------
@@ -113,35 +142,71 @@ def run_eda_workflow(session_id: str, prompt: str, dataset_path: str, data_previ
         # Parse chat_history for likely chart/EDA results
         line_data = []
         pie_data = []
+        has_charts = False  # Flag to track if any charts were actually generated
+        
         for msg in chat_history:
             content = msg.get("content", "")
             # Look for JSON-like chart data in the message content
             if isinstance(content, str):
-                if '"line"' in content or "'line'" in content:
-                    try:
-                        import json
-                        # Try to extract JSON from the string
-                        start = content.find('{')
-                        end = content.rfind('}')
-                        if start != -1 and end != -1:
-                            chart_json = json.loads(content[start:end+1].replace("'", '"'))
-                            if isinstance(chart_json, dict):
-                                if "line" in chart_json and isinstance(chart_json["line"], list):
-                                    line_data = chart_json["line"]
-                                if "pie" in chart_json and isinstance(chart_json["pie"], list):
-                                    pie_data = chart_json["pie"]
-                    except Exception:
-                        pass
-        graph_data = {"line": line_data, "pie": pie_data}
+                if ('"line"' in content or "'line'" in content or 
+                    '"pie"' in content or "'pie'" in content):
+                    has_charts = True  # Charts were mentioned/requested
+                    if '"line"' in content or "'line'" in content:
+                        try:
+                            import json
+                            # Try to extract JSON from the string
+                            start = content.find('{')
+                            end = content.rfind('}')
+                            if start != -1 and end != -1:
+                                chart_json = json.loads(content[start:end+1].replace("'", '"'))
+                                if isinstance(chart_json, dict):
+                                    if "line" in chart_json and isinstance(chart_json["line"], list):
+                                        line_data = chart_json["line"]
+                        except Exception:
+                            pass
+                    if '"pie"' in content or "'pie'" in content:
+                        try:
+                            import json
+                            # Try to extract JSON from the string
+                            start = content.find('{')
+                            end = content.rfind('}')
+                            if start != -1 and end != -1:
+                                chart_json = json.loads(content[start:end+1].replace("'", '"'))
+                                if isinstance(chart_json, dict):
+                                    if "pie" in chart_json and isinstance(chart_json["pie"], list):
+                                        pie_data = chart_json["pie"]
+                        except Exception:
+                            pass
+        
+        # Only create graph_data if charts were actually requested/generated
+        graph_data = {}
+        if has_charts:
+            graph_data = {"line": line_data, "pie": pie_data}
+        else:
+            graph_data = {"line": [], "pie": []}  # Empty but explicit
         # Store graph data as a log in the database
         try:
             from app.database import database, models
             import json
+            import math
+            
+            # Handle NaN/Infinity values in graph_data for database storage
+            def make_db_safe(obj):
+                if isinstance(obj, float):
+                    if math.isnan(obj) or math.isinf(obj):
+                        return None
+                elif isinstance(obj, dict):
+                    return {k: make_db_safe(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [make_db_safe(item) for item in obj]
+                return obj
+            
+            safe_graph_data = make_db_safe(graph_data)
             db = next(database.get_db())
             graph_log = models.Log(
                 session_id=session_id,
                 command="graph_data",
-                output_summary=json.dumps(graph_data)
+                output_summary=json.dumps(safe_graph_data)
             )
             db.add(graph_log)
             db.commit()
@@ -150,10 +215,24 @@ def run_eda_workflow(session_id: str, prompt: str, dataset_path: str, data_previ
         # Write graph_data as graph_data.json in results directory
         try:
             import json
+            import math
+            
+            # Handle NaN/Infinity values in graph_data
+            def make_json_safe(obj):
+                if isinstance(obj, float):
+                    if math.isnan(obj) or math.isinf(obj):
+                        return None
+                elif isinstance(obj, dict):
+                    return {k: make_json_safe(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [make_json_safe(item) for item in obj]
+                return obj
+            
+            safe_graph_data = make_json_safe(graph_data)
             logger.info(f"Attempting to write graph_data.json to: {session_results_dir}")
-            logger.info(f"graph_data content: {graph_data}")
+            logger.info(f"graph_data content: {safe_graph_data}")
             with open(os.path.join(session_results_dir, "graph_data.json"), "w") as f:
-                json.dump(graph_data, f)
+                json.dump(safe_graph_data, f)
             logger.info("Successfully wrote graph_data.json.")
         except Exception as file_exc:
             logger.error(f"Failed to write graph_data.json: {file_exc}")

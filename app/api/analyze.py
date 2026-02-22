@@ -38,6 +38,28 @@ def process_analysis(session_id: str, text: str, dataset_path: str, data_preview
                 content = message.get("content", "")
                 if not isinstance(content, str):
                     content = str(content)
+                
+                # Handle NaN/Infinity values in content
+                import math
+                if isinstance(content, str):
+                    # Check if content contains numeric values that might be NaN
+                    try:
+                        # If content looks like JSON, parse and sanitize it
+                        if content.strip().startswith('{') or content.strip().startswith('['):
+                            import json
+                            parsed_content = json.loads(content)
+                            def sanitize_content(obj):
+                                if isinstance(obj, float):
+                                    if math.isnan(obj) or math.isinf(obj):
+                                        return None
+                                elif isinstance(obj, dict):
+                                    return {k: sanitize_content(v) for k, v in obj.items()}
+                                elif isinstance(obj, list):
+                                    return [sanitize_content(item) for item in obj]
+                                return obj
+                            content = json.dumps(sanitize_content(parsed_content))
+                    except:
+                        pass  # If parsing fails, keep original content
 
                 new_log = models.Log(
                     session_id=session_id,
@@ -107,8 +129,8 @@ async def analyze_data(request: AnalysisRequest, background_tasks: BackgroundTas
             else:
                 raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_type}")
             
-            # Get a preview of the data (first 4 rows only)
-            data_preview = df.head(2).to_string()
+            # Get a minimal preview of the data (first 1 row only) to save tokens
+            data_preview = df.head(1).to_string()
         except Exception as e:
             logger.error(f"Failed to read file: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to read or process the data file: {str(e)}")
@@ -124,6 +146,21 @@ async def analyze_data(request: AnalysisRequest, background_tasks: BackgroundTas
         table_data = []
         try:
             table_data = df.head(10).to_dict(orient="records")
+            # Handle NaN/Infinity values that can't be JSON serialized
+            import math
+            import numpy as np
+            
+            def make_json_serializable(obj):
+                if isinstance(obj, float):
+                    if math.isnan(obj) or math.isinf(obj):
+                        return None  # Convert NaN/Infinity to None
+                elif isinstance(obj, dict):
+                    return {k: make_json_serializable(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [make_json_serializable(item) for item in obj]
+                return obj
+            
+            table_data = make_json_serializable(table_data)
         except Exception:
             table_data = []
 

@@ -38,29 +38,33 @@ config_list_reporter = [
     }
 ]
 
-# Separate llm_configs for each agent
+# Separate llm_configs for each agent - optimized for token efficiency
 llm_config_coordinator = {
     "config_list": config_list_coordinator,
     "seed": 42,
-    "temperature": 0.2,
+    "temperature": 0.1,  # Lower temperature for more deterministic output
+    "max_tokens": 1000,  # Limit token output
 }
 
 llm_config_inspector = {
     "config_list": config_list_inspector,
     "seed": 42,
-    "temperature": 0.2,
+    "temperature": 0.1,
+    "max_tokens": 1500,  # Slightly higher for data inspection
 }
 
 llm_config_visualizer = {
     "config_list": config_list_visualizer,
     "seed": 42,
-    "temperature": 0.2,
+    "temperature": 0.1,
+    "max_tokens": 1200,  # Moderate for code generation
 }
 
 llm_config_reporter = {
     "config_list": config_list_reporter,
     "seed": 42,
-    "temperature": 0.2,
+    "temperature": 0.1,
+    "max_tokens": 800,  # Lower for summary reports
 }
 
 # Common code execution config for agents
@@ -145,11 +149,24 @@ visualizer = autogen.AssistantAgent(
     system_message="""You are a data visualization specialist. Only generate code for plots and graphs, do not write comments.
 
 Your tasks:
-1. Create visualizations using matplotlib or seaborn.
-2. ALWAYS save every plot as a PNG file with descriptive names:
+1. CRITICALLY IMPORTANT: Only create visualizations that are EXPLICITLY mentioned in the user's prompt.
+2. If the user does not mention any specific chart type, DO NOT generate any visualizations.
+3. COUNT how many of each chart type the user requests:
+   - If user says "bar chart", create exactly ONE bar chart
+   - If user says "line graph and pie chart", create exactly ONE line graph and ONE pie chart
+   - If user says "two bar charts", create exactly TWO bar charts
+4. NEVER generate more charts than explicitly requested.
+5. Use matplotlib or seaborn to create the exact graph type requested.
+6. ALWAYS save every plot as a PNG file with descriptive names:
    - Use names like age_distribution.png, gender_chart.png, correlation_heatmap.png
    - Use plt.savefig with bbox_inches tight and dpi 300
-3. Generate separate PNG files for different visualizations, do not combine them.
+   - DO NOT create multiple versions with different capitalization
+7. ALSO save the Python code used to generate each chart:
+   - Save code as {chart_name}_code.py (e.g., age_distribution_code.py)
+   - Include complete working code with all imports
+   - Make code reproducible and self-contained
+8. Generate separate PNG files for different visualizations, do not combine them.
+9. If no chart is requested, simply respond "No visualizations requested" and let the coordinator handle next steps.
 
 When done: Simply respond Visualizations complete and let the coordinator handle next steps.
 
